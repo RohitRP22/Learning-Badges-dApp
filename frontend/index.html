@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Learning Badges</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@1.7.1/dist/web3.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f4f7fa;
+      }
+      h1 {
+        color: #333;
+      }
+      button {
+        padding: 10px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #45a049;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .badge {
+        margin: 10px;
+        padding: 10px;
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Learning Badges dApp</h1>
+
+      <div id="account-info"></div>
+
+      <h2>Issue Badge (Admin Only)</h2>
+      <form id="issue-badge-form">
+        <input
+          type="text"
+          id="badge-name"
+          placeholder="Badge Name (e.g., 'JavaScript Master')"
+          required
+        /><br /><br />
+        <input
+          type="text"
+          id="badge-metadata"
+          placeholder="Metadata (e.g., URL or Description)"
+          required
+        /><br /><br />
+        <input
+          type="text"
+          id="learner-address"
+          placeholder="Learner's Address"
+          required
+        /><br /><br />
+        <button type="submit">Issue Badge</button>
+      </form>
+
+      <hr />
+
+      <h2>Your Badges</h2>
+      <button id="view-badges">View My Badges</button>
+      <div id="badges-list"></div>
+    </div>
+
+    <script>
+      let web3;
+      let contract;
+      let userAccount;
+      const contractAddress = "0x3F0d020AC634Cc4aec759e4FA1A9Ee604D262A4A"; // Replace with your deployed contract address
+      const abi = [
+        {
+          inputs: [],
+          stateMutability: "nonpayable",
+          type: "constructor",
+        },
+        {
+          anonymous: false,
+          inputs: [
+            {
+              indexed: true,
+              internalType: "address",
+              name: "learner",
+              type: "address",
+            },
+            {
+              indexed: false,
+              internalType: "uint256",
+              name: "badgeId",
+              type: "uint256",
+            },
+            {
+              indexed: false,
+              internalType: "string",
+              name: "name",
+              type: "string",
+            },
+          ],
+          name: "BadgeIssued",
+          type: "event",
+        },
+        {
+          inputs: [],
+          name: "admin",
+          outputs: [
+            {
+              internalType: "address",
+              name: "",
+              type: "address",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [],
+          name: "badgeIdCounter",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "",
+              type: "uint256",
+            },
+          ],
+          name: "badges",
+          outputs: [
+            {
+              internalType: "uint256",
+              name: "badgeId",
+              type: "uint256",
+            },
+            {
+              internalType: "string",
+              name: "name",
+              type: "string",
+            },
+            {
+              internalType: "string",
+              name: "metadata",
+              type: "string",
+            },
+            {
+              internalType: "uint256",
+              name: "issuedAt",
+              type: "uint256",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "uint256",
+              name: "badgeId",
+              type: "uint256",
+            },
+          ],
+          name: "getBadgeDetails",
+          outputs: [
+            {
+              components: [
+                {
+                  internalType: "uint256",
+                  name: "badgeId",
+                  type: "uint256",
+                },
+                {
+                  internalType: "string",
+                  name: "name",
+                  type: "string",
+                },
+                {
+                  internalType: "string",
+                  name: "metadata",
+                  type: "string",
+                },
+                {
+                  internalType: "uint256",
+                  name: "issuedAt",
+                  type: "uint256",
+                },
+              ],
+              internalType: "struct LearningBadges.Badge",
+              name: "",
+              type: "tuple",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "learner",
+              type: "address",
+            },
+          ],
+          name: "getBadges",
+          outputs: [
+            {
+              internalType: "uint256[]",
+              name: "",
+              type: "uint256[]",
+            },
+          ],
+          stateMutability: "view",
+          type: "function",
+        },
+        {
+          inputs: [
+            {
+              internalType: "address",
+              name: "learner",
+              type: "address",
+            },
+            {
+              internalType: "string",
+              name: "badgeName",
+              type: "string",
+            },
+            {
+              internalType: "string",
+              name: "metadata",
+              type: "string",
+            },
+          ],
+          name: "issueBadge",
+          outputs: [],
+          stateMutability: "nonpayable",
+          type: "function",
+        },
+      ];
+
+      window.addEventListener("load", async () => {
+        if (typeof window.ethereum !== "undefined") {
+          // Initialize web3
+          web3 = new Web3(window.ethereum);
+          try {
+            await window.ethereum.enable(); // Request user wallet connection
+            const accounts = await web3.eth.getAccounts();
+            userAccount = accounts[0];
+            document.getElementById(
+              "account-info"
+            ).innerHTML = `Connected account: ${userAccount}`;
+
+            // Initialize contract instance
+            contract = new web3.eth.Contract(abi, contractAddress);
+
+            // Event listener for badge issuance
+            contract.events
+              .BadgeIssued({ filter: { learner: userAccount } })
+              .on("data", (event) => {
+                console.log("Badge issued:", event.returnValues);
+              });
+          } catch (error) {
+            console.error("User denied account access or other error:", error);
+          }
+        } else {
+          alert("Please install MetaMask to use this dApp.");
+        }
+      });
+
+      // Issue badge form submission
+      document
+        .getElementById("issue-badge-form")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const badgeName = document.getElementById("badge-name").value;
+          const badgeMetadata = document.getElementById("badge-metadata").value;
+          const learnerAddress =
+            document.getElementById("learner-address").value;
+
+          // Call issueBadge function
+          try {
+            await contract.methods
+              .issueBadge(learnerAddress, badgeName, badgeMetadata)
+              .send({ from: userAccount });
+            alert(`Badge issued to ${learnerAddress}`);
+          } catch (error) {
+            console.error("Error issuing badge:", error);
+          }
+        });
+
+      // View badges
+      document
+        .getElementById("view-badges")
+        .addEventListener("click", async () => {
+          const badges = await contract.methods.getBadges(userAccount).call();
+          const badgesListDiv = document.getElementById("badges-list");
+          badgesListDiv.innerHTML = "";
+
+          if (badges.length === 0) {
+            badgesListDiv.innerHTML = "No badges found.";
+            return;
+          }
+
+          for (let badgeId of badges) {
+            const badge = await contract.methods
+              .getBadgeDetails(badgeId)
+              .call();
+            const badgeElement = document.createElement("div");
+            badgeElement.classList.add("badge");
+            badgeElement.innerHTML = `
+                    <strong>Badge Name:</strong> ${badge.name}<br>
+                    <strong>Issued At:</strong> ${new Date(
+                      badge.issuedAt * 1000
+                    ).toLocaleString()}<br>
+                    <strong>Metadata:</strong> ${badge.metadata}
+                `;
+            badgesListDiv.appendChild(badgeElement);
+          }
+        });
+    </script>
+  </body>
+</html>
